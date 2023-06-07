@@ -796,6 +796,79 @@ region_t* extract_requests_ipp(unsigned char* buf, unsigned int buf_size, unsign
   return regions;
 }
 
+region_t* extract_requests_rtps(unsigned char* buf, unsigned int buf_size, unsigned int* region_count_ref)
+{
+  char *mem;
+  unsigned int byte_count = 0;
+  unsigned int mem_count = 0;
+  unsigned int mem_size = 1024;
+  unsigned int region_count = 0;
+  region_t *regions = NULL;
+  char terminator[4] = {0x52, 0x54, 0x50, 0x53};
+
+  mem=(char *)ck_alloc(mem_size);
+
+  unsigned int cur_start = 0;
+  unsigned int cur_end = 0;
+  while (byte_count < buf_size) {
+
+    memcpy(&mem[mem_count], buf + byte_count++, 1);
+
+    //Check if the RTPS packet ended
+    if ((mem_count > 3) && 
+    // ((memcmp(&mem[mem_count - 3], terminator, 4) == 0)) && // Last four bytes are RTPS
+    ((buf_size - byte_count >= 4) && (memcmp(buf + byte_count, "RTPS", 4) == 0)) // next packet started
+    ) {
+      region_count++;
+      regions = (region_t *)ck_realloc(regions, region_count * sizeof(region_t));
+      regions[region_count - 1].start_byte = cur_start;
+      regions[region_count - 1].end_byte = cur_end;
+      regions[region_count - 1].state_sequence = NULL;
+      regions[region_count - 1].state_count = 0;
+
+      mem_count = 0;
+      cur_start = cur_end + 1;
+      cur_end = cur_start;
+    } else {
+      mem_count++;
+      cur_end++;
+
+      //Check if the last byte has been reached
+      if (cur_end == buf_size - 1) {
+        region_count++;
+        regions = (region_t *)ck_realloc(regions, region_count * sizeof(region_t));
+        regions[region_count - 1].start_byte = cur_start;
+        regions[region_count - 1].end_byte = cur_end;
+        regions[region_count - 1].state_sequence = NULL;
+        regions[region_count - 1].state_count = 0;
+        break;
+      }
+
+      if (mem_count == mem_size) {
+        //enlarge the mem buffer
+        mem_size = mem_size * 2;
+        mem=(char *)ck_realloc(mem, mem_size);
+      }
+    }
+  }
+  if (mem) ck_free(mem);
+
+  //in case region_count equals zero, it means that the structure of the buffer is broken
+  //hence we create one region for the whole buffer
+  if ((region_count == 0) && (buf_size > 0)) {
+    regions = (region_t *)ck_realloc(regions, sizeof(region_t));
+    regions[0].start_byte = 0;
+    regions[0].end_byte = buf_size - 1;
+    regions[0].state_sequence = NULL;
+    regions[0].state_count = 0;
+
+    region_count = 1;
+  }
+
+  *region_count_ref = region_count;
+  return regions;
+}
+
 unsigned int* extract_response_codes_smtp(unsigned char* buf, unsigned int buf_size, unsigned int* state_count_ref)
 {
   char *mem;
@@ -1498,6 +1571,76 @@ unsigned int* extract_response_codes_ipp(unsigned char* buf, unsigned int buf_si
   }
 
   if (mem) ck_free(mem);
+  *state_count_ref = state_count;
+  return state_sequence;
+}
+/*
+# as per 9.4.5.1.1
+SUBMSG_ID_NAME_MAP = {
+    0x00: "RTPS_HE",
+    0x01: "PAD",
+    0x06: "ACKNACK",
+    0x07: "HEARTBEAT",
+    0x08: "GAP",
+    0x09: "INFO_TS",
+    0x0c: "INFO_SRC",
+    0x0d: "INFO_REPLY_IP4",
+    0x0e: "INFO_DST",
+    0x0f: "INFO_REPLY",
+    0x12: "NACK_FRAG",
+    0x13: "HEARTBEAT_FRAG",
+    0x15: "DATA",
+    0x16: "DATA_FRAG"
+}
+*/
+// RTPS submessage ids:
+// #define RTPS_HE 0x00
+// #define PAD 0x01
+// #define ACKNACK 0x06
+// #define HEARTBEAT 0x07
+// #define GAP 0x08
+// #define INFO_TS 0x09
+// #define INFO_SRC 0x0C
+// #define INFO_REPLY_IP4 0x0D
+// #define INFO_DST 0x0E
+// #define INFO_REPLY 0x0F
+// #define NACK_FRAG 0x12
+// #define HEARTBEAT_FRAG 0x13
+// #define DATA 0x15
+// #define DATA_FRAG 0x16
+
+unsigned int* extract_response_codes_rtps(unsigned char* buf, unsigned int buf_size, unsigned int* state_count_ref)
+{
+  unsigned int *state_sequence = NULL;
+  unsigned int state_count = 0;
+  
+  state_count++;
+  state_sequence = (unsigned int *)ck_realloc(state_sequence, state_count * sizeof(unsigned int));
+  state_sequence[state_count - 1] = 0;
+
+  for (unsigned int byte_count = 0; byte_count < buf_size; byte_count++) {
+    // check if this is header
+    if ((buf_size - byte_count >= 4) && (memcmp(buf + byte_count, "RTPS", 4) == 0)){
+        byte_count += 19; // skip first 20 bytes of header to submessages
+        // printf("Found header and skipping\n");
+        continue;
+    }
+    if (buf_size - byte_count < 4) break;
+
+    // Parse submessage
+    // 1. Get submessage ID:
+    unsigned int message_code = (unsigned int) (buf[byte_count]);
+    // save the id as state:
+    state_count++;
+    state_sequence = (unsigned int *)ck_realloc(state_sequence, state_count * sizeof(unsigned int));
+    state_sequence[state_count - 1] = message_code;
+    byte_count ++; // Message ID
+    byte_count ++; // Flag ID
+    // skip bytes:
+    unsigned int skip_bytes = (unsigned char)buf[byte_count + 1] << 8 | (unsigned char)buf[byte_count]; //
+    byte_count += 1; // message data
+    byte_count += skip_bytes; // skip payload
+  }
   *state_count_ref = state_count;
   return state_sequence;
 }

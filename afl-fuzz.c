@@ -8096,7 +8096,7 @@ static void usage(u8* argv0) {
        "Settings for network protocol fuzzing (AFLNet):\n\n"
 
        "  -N netinfo    - server information (e.g., tcp://127.0.0.1/8554)\n"
-       "  -P protocol   - application protocol to be tested (e.g., RTSP, FTP, DTLS12, DNS, SMTP, SSH, TLS)\n"
+       "  -P protocol   - application protocol to be tested (e.g., RTSP, FTP, DTLS12, DNS, SMTP, SSH, TLS, RTPS)\n"
        "  -D usec       - waiting time (in micro seconds) for the server to initialize\n"
        "  -W msec       - waiting time (in miliseconds) for receiving the first response to each input sent\n"
        "  -w usec       - waiting time (in micro seconds) for receiving follow-up responses\n"
@@ -9070,6 +9070,9 @@ int main(int argc, char** argv) {
         } else if (!strcmp(optarg, "IPP")) {
           extract_requests = &extract_requests_ipp;
           extract_response_codes = &extract_response_codes_ipp;
+        } else if (!strcmp(optarg, "RTPS")) {
+          extract_requests = &extract_requests_rtps;
+          extract_response_codes = &extract_response_codes_rtps;
         } else {
           FATAL("%s protocol is not supported yet!", optarg);
         }
