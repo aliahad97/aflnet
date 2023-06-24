@@ -1805,14 +1805,17 @@ int net_recv(int sockfd, struct timeval timeout, int poll_w, char **response_buf
   struct pollfd pfd[1];
   pfd[0].fd = sockfd;
   pfd[0].events = POLLIN;
+  // ACTF("POLLING to recv");
   int rv = poll(pfd, 1, poll_w);
-
+  // ACTF("Done POLLING %d", rv);
   setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
+  // ACTF("net_recv lets recv now");
   // data received
   if (rv > 0) {
     if (pfd[0].revents & POLLIN) {
       n = recv(sockfd, temp_buf, sizeof(temp_buf), 0);
       if ((n < 0) && (errno != EAGAIN)) {
+        // ACTF("net_recv exited with 1");
         return 1;
       }
       while (n > 0) {
@@ -1823,15 +1826,18 @@ int net_recv(int sockfd, struct timeval timeout, int poll_w, char **response_buf
         *len = *len + n;
         n = recv(sockfd, temp_buf, sizeof(temp_buf), 0);
         if ((n < 0) && (errno != EAGAIN)) {
+          // ACTF("net_recv exited with 1");
           return 1;
         }
       }
     }
   } else
     if (rv < 0) // an error was returned
+      // ACTF("net_recv exited with 1");
       return 1;
 
   // rv == 0 poll timeout or all data pending after poll has been received successfully
+  // ACTF("net_recv exited with 0");
   return 0;
 }
 

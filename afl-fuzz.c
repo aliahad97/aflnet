@@ -993,10 +993,10 @@ int send_over_network()
 
   //Clean up the server if needed
   if (cleanup_script) system(cleanup_script);
-
+  // ACTF("Initializing server");
   //Wait a bit for the server initialization
   usleep(server_wait_usecs);
-
+  // ACTF("Reseting response buffer");
   //Clear the response buffer and reset the response buffer size
   if (response_buf) {
     ck_free(response_buf);
@@ -1037,6 +1037,7 @@ int send_over_network()
   //The Kamailio SIP server is an example. After running this code, the intialized sockfd 
   //will be bound to the given local port
   if(local_port > 0) {
+    // ACTF("bound to local port%d",local_port);
     local_serv_addr.sin_family = AF_INET;
     local_serv_addr.sin_addr.s_addr = INADDR_ANY;
     local_serv_addr.sin_port = htons(local_port);
@@ -1059,7 +1060,7 @@ int send_over_network()
       return 1;
     }
   }
-
+  // ACTF("connected to server");
   //retrieve early server response if needed
   if (net_recv(sockfd, timeout, poll_wait_msecs, &response_buf, &response_buf_size)) goto HANDLE_RESPONSES;
 
@@ -1070,7 +1071,7 @@ int send_over_network()
   for (it = kl_begin(kl_messages); it != kl_end(kl_messages); it = kl_next(it)) {
     n = net_send(sockfd, timeout, kl_val(it)->mdata, kl_val(it)->msize);
     messages_sent++;
-
+    // ACTF("Messages sent %d", messages_sent);
     //Allocate memory to store new accumulated response buffer size
     response_bytes = (u32 *) ck_realloc(response_bytes, messages_sent * sizeof(u32));
 
@@ -1095,7 +1096,7 @@ int send_over_network()
   }
 
 HANDLE_RESPONSES:
-
+  // ACTF("handling responses from server");
   net_recv(sockfd, timeout, poll_wait_msecs, &response_buf, &response_buf_size);
 
   if (messages_sent > 0 && response_bytes != NULL) {
@@ -3171,7 +3172,7 @@ static u8 run_target(char** argv, u32 timeout) {
      init_forkserver(), but c'est la vie. */
 
   if (dumb_mode == 1 || no_forkserver) {
-
+    // ACTF("Dumb mode running");
     child_pid = fork();
 
     if (child_pid < 0) PFATAL("fork() failed");
@@ -3255,7 +3256,7 @@ static u8 run_target(char** argv, u32 timeout) {
   } else {
 
     s32 res;
-
+    // ACTF("Non-Dumb mode running");
     /* In non-dumb mode, we have the fork server up and running, so simply
        tell it to have at it, and then read back PID. */
 
@@ -3428,7 +3429,7 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
     if (!first_run && !(stage_cur % stats_update_freq)) show_stats();
 
     write_to_testcase(use_mem, q->len);
-
+    ACTF("++++ Running binary now...");
     fault = run_target(argv, use_tmout);
 
     /* stop_soon is set by the handler for Ctrl+C. When it's pressed,
